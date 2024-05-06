@@ -1,0 +1,91 @@
+import User from '../models/User.js';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import logger from '../logger/logger.js';
+
+// User Signup endpoint
+export const signup = async (req, res) => {
+	try {
+		const { email, password, firstName, lastName } = req.body;
+
+		// Check if user already exists
+		let existingUser = await User.findOne({ email });
+		if (existingUser) {
+			return res.status(400).json({ error: 'User already exists' });
+		}
+
+		// Hash password
+		const hashedPassword = await bcrypt.hash(password, 10);
+
+		// Create new user
+		const newUser = new User({
+			email,
+			password: hashedPassword,
+			firstName,
+			lastName,
+		});
+		await newUser.save();
+
+		res.status(201).json({ message: 'User created successfully' });
+	} catch (error) {
+		logger.error(error);
+		res.status(500).json({ error: 'Server error' });
+	}
+};
+
+// User Login endpoint
+export const login = async (req, res) => {
+	try {
+		const { email, password } = req.body;
+
+		// Check if user exists
+		const user = await User.findOne({ email });
+		if (!user) {
+			return res.status(400).json({ error: 'Invalid credentials' });
+		}
+
+		// Check password
+		const isPasswordValid = await bcrypt.compare(password, user.password);
+		if (!isPasswordValid) {
+			return res.status(400).json({ error: 'Invalid credentials' });
+		}
+
+		// Generate JWT token
+		const accessToken = jwt.sign(
+			{ userId: user._id },
+			process.env.ACCESS_TOKEN_SECRET,
+			{
+				expiresIn: '1h',
+			}
+		);
+		const options = {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === 'production',
+		};
+		res.cookie('accessToken', accessToken, options).json({ accessToken });
+	} catch (error) {
+		logger.error(error);
+		res.status(500).json({ error: 'Server error' });
+	}
+};
+
+// Token Refresh endpoint (optional)
+export const refreshToken = async (req, res) => {
+	try {
+		// Implement token refreshing logic here
+		res.send('refresh token');
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ error: 'Server error' });
+	}
+};
+
+export const getUserInfo = async (req, res) => {
+	try {
+		const user = User.findById({ _id: req.user._id });
+		res.json(user);
+	} catch (error) {
+		console.error(error);
+		res.status(500).json({ error: 'Server error' });
+	}
+};
