@@ -62,7 +62,10 @@ export const login = async (req, res) => {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === 'production',
 		};
-		res.cookie('accessToken', accessToken, options).json({ accessToken });
+		res
+			.status(200)
+			.cookie('accessToken', accessToken, options)
+			.json({ accessToken });
 	} catch (error) {
 		logger.error(error);
 		res.status(500).json({ error: 'Server error' });
@@ -75,17 +78,38 @@ export const refreshToken = async (req, res) => {
 		// Implement token refreshing logic here
 		res.send('refresh token');
 	} catch (error) {
-		console.error(error);
+		logger.error(error);
 		res.status(500).json({ error: 'Server error' });
 	}
 };
 
 export const getUserInfo = async (req, res) => {
 	try {
-		const user = User.findById({ _id: req.user._id });
-		res.json(user);
+		const user = await User.findById({ _id: req.user._id });
+		res.status(200).json(user);
 	} catch (error) {
-		console.error(error);
+		logger.error(error);
+		res.status(500).json({ error: 'Server error' });
+	}
+};
+export const deleteUser = async (req, res) => {
+	try {
+		const user = await User.findOneAndDelete({ email: req.body.email });
+		if (!user) {
+			return res.status(200).json({ message: 'user deleted' });
+		}
+		res.status(200).json({ message: 'user deleted successfully' });
+	} catch (error) {
+		logger.error(error);
+		res.status(500).json({ error: 'Server error' });
+	}
+};
+export const getUsers = async (req, res) => {
+	try {
+		const users = await User.find();
+		res.status(200).json(users);
+	} catch (error) {
+		logger.error(error);
 		res.status(500).json({ error: 'Server error' });
 	}
 };

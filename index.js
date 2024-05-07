@@ -1,5 +1,4 @@
 import express from 'express';
-import { connect, set } from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import blogRoutes from './routes/blog.js';
@@ -9,26 +8,16 @@ import cookieParser from 'cookie-parser';
 import bodyParser from 'body-parser';
 import logger from './logger/logger.js';
 dotenv.config();
-
+import connectDb from './utils/connectDb.js';
 // Create Express app
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
 app.use(cookieParser('NotSoSecret'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
-
-set('strictQuery', true);
-// MongoDB connection
-connect(process.env.MDB_URL, {
-	useNewUrlParser: true,
-	useUnifiedTopology: true,
-})
-	.then(() => {
-		console.log('connected to database successfully');
-	})
-	.catch((err) => console.log(err));
 
 // // users routes
 app.use('/users', userRoutes);
@@ -41,5 +30,8 @@ app.use('/', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
+	connectDb();
 	logger.info(`Server is running on port ${PORT}`);
 });
+
+export default app;

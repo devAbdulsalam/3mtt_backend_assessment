@@ -1,6 +1,6 @@
-import User from '../models/User.js';
 import Blog from '../models/Blog.js';
 import logger from '../logger/logger.js';
+import { getPaginatedPayload } from '../utils/getPagination.js';
 
 // User Signup endpoint
 export const createBlog = async (req, res) => {
@@ -62,57 +62,60 @@ export const getBlog = async (req, res) => {
 export const getUserBlogs = async (req, res) => {
 	try {
 		const blogs = await Blog.find({ author: req.params.id });
-		res.json(blogs);
+		res.status(200).json(blogs);
 	} catch (error) {
 		logger.error(`Error fetching blog: ${error}`);
 		res.status(500).json({ error: 'Server error' });
 	}
 };
 // Read Blogs
-export const getBlogs = async (req, res) => {
+export const getBlogs = async ({ query }, res) => {
 	try {
-		let query = { state: 'published' };
-
 		// Pagination
-		const page = parseInt(req.query.page) || 1;
-		const limit = parseInt(req.query.limit) || 20;
+		const page = parseInt(query.page) || 1;
+		const limit = parseInt(query.limit) || 20;
 		const skip = (page - 1) * limit;
 
-		// Filtering
-		if (req.query.id) {
-			query._id = req.query.id;
-		}
-		if (req.query.author) {
-			query.author = req.query.author;
-		}
-		if (req.query.title) {
-			query.title = { $regex: req.query.title, $options: 'i' }; // Case-insensitive search
-		}
-		if (req.query.tags) {
-			query.tags = { $in: req.query.tags.split(',') };
-		}
+		const { id, author, title, tags, sortBy, sortOrder } = query;
+
+		// Combine filter conditions
+		const filter = { state: 'published' };
+		if (id) filter._id = id;
+		if (author) filter.author = author;
+		if (title) filter.title = { $regex: title, $options: 'i' }; // Case-insensitive search
+		if (tags) filter.tags = { $in: tags.split(',') };
 
 		// Sorting
 		let sort = { timestamp: -1 }; // Default sorting by timestamp
-		if (req.query.sortBy) {
-			const sortOrder = req.query.sortOrder === 'desc' ? -1 : 1;
-			sort = { [req.query.sortBy]: sortOrder };
+		if (sortBy) {
+			const sortOrderValue = sortOrder === 'desc' ? -1 : 1;
+			sort = { [sortBy]: sortOrderValue };
 		}
-		// Execute query
-		const blogs = await Blog.find(query)
-			.populate('author', 'firstName lastName')
-			.sort(sort)
-			.skip(skip)
-			.limit(limit);
 
-		res.json(blogs);
+		// Execute query and count concurrently
+		const [blogs, totalItems] = await Promise.all([
+			Blog.find(filter)
+				.populate('author', 'firstName lastName')
+				.sort(sort)
+				.skip(skip)
+				.limit(limit),
+			Blog.countDocuments(filter),
+		]);
+
+		// Optimize response
+		const data = {
+			data: getPaginatedPayload(blogs, page, limit, totalItems),
+			message: 'Blogs fetched successfully',
+			success: true,
+		};
+
+		res.status(200).json(data);
 	} catch (error) {
 		logger.error(error);
 		res.status(500).json({ error: 'Server error' });
 	}
 };
 
-// Update Blog
 export const updateBlog = async (req, res) => {
 	try {
 		const userId = req.user._id;
@@ -138,7 +141,7 @@ export const updateBlog = async (req, res) => {
 
 		await blog.save();
 
-		res.json({ message: 'Blog updated successfully', blog });
+		res.status(200).json({ message: 'Blog updated successfully', blog });
 	} catch (error) {
 		logger.error(error);
 		res.status(500).json({ error: 'Server error' });
@@ -163,7 +166,19 @@ export const deleteBlog = async (req, res) => {
 		}
 		await Blog.findByIdAndDelete(blogId);
 
-		res.json({ message: 'Blog deleted successfully' });
+		res.status(200).json({ message: 'Blog deleted successfully' });
+	} catch (error) {
+		logger.error(error);
+		res.status(500).json({ error: 'Server error' });
+	}
+};
+export const deleteBlogTitle = async (req, res) => {
+	try {
+		const blog = await Blog.findOneAndDelete({ title: req.body.title });
+		if (!blog) {
+			return res.status(200).json({ message: 'blog deleted' });
+		}
+		res.status(200).json({ message: 'blog deleted successfully' });
 	} catch (error) {
 		logger.error(error);
 		res.status(500).json({ error: 'Server error' });
